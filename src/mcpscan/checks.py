@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .models import Manifest, Tool
+from .secrets import find_secrets
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,108 @@ def detect_broad_scope(tool: Tool) -> list[str]:
     return details
 
 
+# --- check 3: exfiltration_path ----------------------------------------------
+
+_SENSITIVE_SOURCE = re.compile(
+    r"(?i)\b(env(?:ironment)?\s+variables?|\.env\b|secrets?|credentials?|api[_ -]?keys?|tokens?|private\s+keys?|ssh\s+keys?|password)"
+)
+_SINK_PROP_NAMES = re.compile(r"(?i)(url|uri|endpoint|webhook|callback|destination|remote)")
+_SINK_VERBS = re.compile(r"(?i)\b(send|post|upload|forward|transmit|sync|exfiltrate)s?\b")
+
+
+def detect_exfiltration_path(tool: Tool) -> list[str]:
+    text = f"{tool.description} {json.dumps(tool.schema)} {' '.join(tool.permissions)}"
+
+    sources: list[str] = []
+    for rule_name, masked in find_secrets(text):
+        sources.append(f"secret-like value ({rule_name}: {masked})")
+    source_match = _SENSITIVE_SOURCE.search(text)
+    if source_match:
+        sources.append(f"sensitive data reference ({source_match.group(0)!r})")
+
+    sinks: list[str] = []
+    properties = tool.schema.get("properties", {})
+    if isinstance(properties, dict):
+        for prop_name in properties:
+            if _SINK_PROP_NAMES.search(prop_name):
+                sinks.append(f"network sink parameter {prop_name!r}")
+    if _SINK_VERBS.search(tool.description) and re.search(
+        r"(?i)\b(webhook|https?://|external|remote|server|endpoint)\b", tool.description
+    ):
+        sinks.append("description pairs a send verb with an external destination")
+
+    if sources and sinks:
+        return [f"{sources[0]} can flow to {sinks[0]}"]
+    return []
+
+
+# --- check 4: missing_auth (server scope) -------------------------------------
+
+
+def detect_missing_auth(manifest: Manifest) -> list[str]:
+    details: list[str] = []
+    auth_type = str(manifest.auth.get("type", "")).lower() if manifest.auth else ""
+    if not auth_type or auth_type == "none":
+        details.append("server declares no authentication or scoped consent")
+    if manifest.transport.startswith("http://"):
+        details.append(f"unencrypted transport: {manifest.transport!r}")
+    return details
+
+
+# --- check 5: supply_chain (server scope) --------------------------------------
+
+_UNPINNED_VERSIONS = {"", "latest", "*"}
+
+POPULAR_SERVERS = [
+    "filesystem",
+    "github",
+    "gitlab",
+    "slack",
+    "postgres",
+    "sqlite",
+    "puppeteer",
+    "playwright",
+    "fetch",
+    "memory",
+    "sentry",
+    "stripe",
+    "notion",
+    "linear",
+]
+
+
+def _edit_distance(a: str, b: str) -> int:
+    previous = list(range(len(b) + 1))
+    for i, char_a in enumerate(a, start=1):
+        current = [i]
+        for j, char_b in enumerate(b, start=1):
+            current.append(
+                min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (char_a != char_b))
+            )
+        previous = current
+    return previous[-1]
+
+
+def detect_supply_chain(manifest: Manifest) -> list[str]:
+    details: list[str] = []
+
+    version = manifest.version.strip()
+    if version.lower() in _UNPINNED_VERSIONS or version.startswith(("^", "~", ">", "<")):
+        details.append(f"version is not pinned: {version or '<missing>'!r}")
+
+    if not manifest.publisher.strip():
+        details.append("publisher is missing or unknown")
+
+    name = manifest.name.strip().lower()
+    if name and name not in POPULAR_SERVERS:
+        for popular in POPULAR_SERVERS:
+            if _edit_distance(name, popular) == 1:
+                details.append(f"server name {manifest.name!r} typosquats popular server {popular!r}")
+                break
+
+    return details
+
+
 CHECKS: list[Check] = [
     Check(
         name="tool_poisoning",
@@ -121,5 +224,26 @@ CHECKS: list[Check] = [
         scope="tool",
         remediation="Narrow permissions to the tool's stated purpose: no wildcard scopes, no shell/exec parameters, no default root-filesystem access.",
         detect=detect_broad_scope,
+    ),
+    Check(
+        name="exfiltration_path",
+        severity="HIGH",
+        scope="tool",
+        remediation="Separate sensitive-data access from network egress: a tool that reads env/files/secrets must not also accept an arbitrary URL or webhook destination.",
+        detect=detect_exfiltration_path,
+    ),
+    Check(
+        name="missing_auth",
+        severity="MEDIUM",
+        scope="server",
+        remediation="Require authentication with scoped consent (e.g. OAuth2 with least-privilege scopes) and serve the endpoint over HTTPS.",
+        detect=detect_missing_auth,
+    ),
+    Check(
+        name="supply_chain",
+        severity="MEDIUM",
+        scope="server",
+        remediation="Pin an exact server version, declare a verifiable publisher, and avoid names that shadow popular servers.",
+        detect=detect_supply_chain,
     ),
 ]
