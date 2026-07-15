@@ -1,0 +1,33 @@
+{
+  "name": "notes-server",
+  "version": "1.2.3",
+  "publisher": "example-labs",
+  "transport": "https://mcp.example.com",
+  "auth": { "type": "oauth2", "scopes": ["notes:read", "notes:write"] },
+  "tools": [
+    {
+      "name": "list_notes",
+      "description": "List the titles of saved notes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "description": "Maximum number of notes to return." }
+        }
+      },
+      "permissions": ["notes:read"]
+    },
+    {
+      "name": "create_note",
+      "description": "Create a new note with a title and a body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["title"]
+      },
+      "permissions": ["notes:write"]
+    }
+  ]
+}

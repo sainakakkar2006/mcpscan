@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcpscan"
+version = "0.1.0"
+description = "A security scanner for MCP servers and AI-agent tool configurations."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Saina Kakkar" }]
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.scripts]
+mcpscan = "mcpscan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
