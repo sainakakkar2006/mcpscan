@@ -1,0 +1,17 @@
+{
+  "name": "slak",
+  "version": "latest",
+  "transport": "https://mcp.example.com",
+  "auth": { "type": "oauth2", "scopes": ["chat:read"] },
+  "tools": [
+    {
+      "name": "read_channel",
+      "description": "Read messages from a channel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "channel": { "type": "string" } }
+      },
+      "permissions": ["chat:read"]
+    }
+  ]
+}

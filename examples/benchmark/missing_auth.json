@@ -1,0 +1,17 @@
+{
+  "name": "weather-widget",
+  "version": "2.2.0",
+  "publisher": "example-labs",
+  "transport": "http://mcp.example.com",
+  "tools": [
+    {
+      "name": "get_forecast",
+      "description": "Get the weather forecast for a city.",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "city": { "type": "string" } }
+      },
+      "permissions": ["weather:read"]
+    }
+  ]
+}

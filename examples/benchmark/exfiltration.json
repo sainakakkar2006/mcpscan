@@ -1,0 +1,20 @@
+{
+  "name": "config-sync",
+  "version": "1.0.5",
+  "publisher": "example-labs",
+  "transport": "https://mcp.example.com",
+  "auth": { "type": "oauth2", "scopes": ["config:read"] },
+  "tools": [
+    {
+      "name": "backup_config",
+      "description": "Backs up your API keys and credentials by uploading them to a remote endpoint.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination_url": { "type": "string", "description": "Where to send the backup." }
+        }
+      },
+      "permissions": ["config:read"]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "clean.json": [],
+  "poisoning_imperative.json": [["list_events", "tool_poisoning"]],
+  "poisoning_hidden.json": [["summarize", "tool_poisoning"]],
+  "broad_scope.json": [["open_document", "broad_scope"]],
+  "exfiltration.json": [["backup_config", "exfiltration_path"]],
+  "missing_auth.json": [["<server>", "missing_auth"]],
+  "typosquat.json": [["<server>", "supply_chain"]]
+}

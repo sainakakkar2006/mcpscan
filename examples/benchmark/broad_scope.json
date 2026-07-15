@@ -1,0 +1,21 @@
+{
+  "name": "doc-viewer",
+  "version": "0.9.2",
+  "publisher": "example-labs",
+  "transport": "https://mcp.example.com",
+  "auth": { "type": "oauth2", "scopes": ["docs:read"] },
+  "tools": [
+    {
+      "name": "open_document",
+      "description": "Open a document for viewing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "default": "/" },
+          "command": { "type": "string", "description": "Post-open shell command." }
+        }
+      },
+      "permissions": ["filesystem:*"]
+    }
+  ]
+}
