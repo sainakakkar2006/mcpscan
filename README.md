@@ -26,7 +26,7 @@ inline dict) and it produces three things:
 - a single deterministic **risk score** (0 to 100, with a low/medium/high band)
 
 I built it on the architecture of my
-[secret-scanner-cli](https://github.com/sainakakkar2006/secret-scanner-cli).
+[pii-secret-scanner](https://github.com/sainakakkar2006/pii-secret-scanner).
 It uses the same declarative detector pattern, and the secret-detection
 regexes and `mask_secret` are reused directly for the exfiltration check.
 
@@ -187,7 +187,7 @@ src/mcpscan/
   loader.py     loads manifests from file, URL, or dict
   models.py     Manifest / Tool / Finding dataclasses
   checks.py     the five detectors
-  secrets.py    secret regexes + mask_secret (reused from secret-scanner-cli)
+  secrets.py    secret regexes + mask_secret (reused from pii-secret-scanner)
   scoring.py    deterministic score and band
   reporting.py  text / json / md formatters
   llm.py        optional poisoning classifier behind --llm
