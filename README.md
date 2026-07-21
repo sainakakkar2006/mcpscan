@@ -5,19 +5,17 @@
 <p align="center">
   <!-- BADGES:START -->
   <a href="#"><img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue"></a>
-  <a href="#"><img alt="stdlib core" src="https://img.shields.io/badge/core-stdlib%20only-green"></a>
-  <a href="#"><img alt="FastAPI" src="https://img.shields.io/badge/fastapi-optional-009688?logo=fastapi&logoColor=white"></a>
-  <a href="#"><img alt="MCP" src="https://img.shields.io/badge/MCP-manifest%20scanner-6b7f9c"></a>
+  <a href="#"><img alt="FastAPI" src="https://img.shields.io/badge/fastapi-009688?logo=fastapi&logoColor=white"></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
   <!-- BADGES:END -->
 </p>
 
-# MCPScan
+# mcpscan
 
 Author: Saina Kakkar
 
 ### Project Description
-MCPScan is a security scanner for **MCP (Model Context Protocol) servers**
+mcpscan is a security scanner for **MCP (Model Context Protocol) servers**
 and AI-agent tool configurations.
 
 You point it at an MCP manifest (a `.json` file, an endpoint URL, or an
@@ -58,6 +56,9 @@ pip install ".[api]"     # + FastAPI service
 pip install ".[llm]"     # + LLM tool-poisoning classifier
 ```
 
+The core has zero third-party dependencies on purpose. A security tool with
+a big dependency tree is itself a supply-chain risk.
+
 ## Usage
 
 ```bash
@@ -65,9 +66,6 @@ mcpscan scan examples/clean_manifest.json
 mcpscan scan examples/poisoned_manifest.json --format md --out report.md
 mcpscan scan https://mcp.example.com/manifest.json --format json
 ```
-
-Exit code is non-zero when any HIGH finding exists (for CI), unless you pass
-`--no-fail`.
 
 This is what a scan of the bundled poisoned example looks like:
 
@@ -83,9 +81,28 @@ read_file [HIGH] tool_poisoning
        descriptions; descriptions should only describe what the tool does.
 ```
 
-Notice the server name in that example is `githb`, one letter off from
+The server name in that example is `githb`, one letter off from
 `github`. That is intentional. It is the typosquatting case the
 `supply_chain` check looks for.
+
+## CLI Reference
+
+The CLI has a single subcommand, `scan`, with these options:
+
+| Argument | Default | What it does |
+|---|---|---|
+| `target` | (required) | Path to a manifest `.json` file or an http(s) endpoint URL |
+| `--format` | `text` | Report format: `text`, `json`, or `md` |
+| `--out` | none | Write the report to a file instead of only stdout |
+| `--no-fail` | off | Always exit with code 0, even when HIGH findings exist |
+| `--llm` | off | Also run the LLM tool-poisoning classifier (requires the `llm` extra) |
+
+Exit codes: `0` when the scan is clean or `--no-fail` is set, non-zero when
+any HIGH finding exists. That makes the one-line CI integration work:
+
+```yaml
+- run: mcpscan scan ./manifest.json
+```
 
 ## The Checks
 
@@ -97,6 +114,22 @@ Notice the server name in that example is `githb`, one letter off from
 | 4 | `missing_auth` | MEDIUM | No declared authentication/scoped consent, or unencrypted (http://) transport. |
 | 5 | `supply_chain` | MEDIUM | Unpinned versions, unknown publishers, names typosquatting popular servers. |
 | 6 | `shadow_tools` | HIGH | *(planned, dynamic)* Live server exposes tools not in its manifest or makes unexpected network calls. |
+
+Some detail on the two checks that took the most work:
+
+**`tool_poisoning`.** Obvious injections like "Ignore all previous
+instructions" are easy to match. Attackers can instead hide instructions in
+zero-width Unicode characters, or encode them as base64 so the manifest
+looks clean to a human reviewer. The detector flags invisible characters
+that have no business being in a tool description, and it decodes candidate
+base64 strings and inspects what comes out.
+
+**`exfiltration_path`.** One tool that reads the environment is sometimes
+fine. One tool that posts to an arbitrary URL is sometimes fine. The
+combination is the problem, because the agent can be steered to read a
+secret with the first tool and send it out with the second. This check looks
+at the manifest as a whole, pairs sensitive sources with network sinks, and
+reports the pair, not the individual tools.
 
 ## Output Contract
 
@@ -110,22 +143,26 @@ Notice the server name in that example is `githb`, one letter off from
 }
 ```
 
-Scoring is deterministic: HIGH = 35, MEDIUM = 15, LOW = 5, capped at 100. The
-band follows the worst severity present. I considered asking an LLM to look
-at each manifest and produce a risk number, but then the same manifest could
-score differently on every run, which is useless in CI. So the score is
-plain arithmetic over the findings, and the optional `--llm` flag only
+Scoring is deterministic: HIGH = 35, MEDIUM = 15, LOW = 5, capped at 100.
+The band follows the worst severity present. I considered asking an LLM to
+look at each manifest and produce a risk number, but then the same manifest
+could score differently on every run, which is useless in CI. So the score
+is plain arithmetic over the findings, and the optional `--llm` flag only
 improves recall on the poisoning check. It never touches the math.
 
 ## API
 
-Prefer a service over a CLI? The same scanner runs behind FastAPI:
+The same scanner also runs behind FastAPI with a single endpoint,
+`POST /scan`:
 
 ```bash
 pip install ".[api]"
 uvicorn mcpscan.api:app
 curl -X POST localhost:8000/scan -H 'content-type: application/json' -d @examples/poisoned_manifest.json
 ```
+
+The response body is the same JSON report the CLI produces with
+`--format json`, so tooling can treat the two interchangeably.
 
 ## Benchmark
 
@@ -141,19 +178,37 @@ PYTHONPATH=src python3 scripts/benchmark.py
 The script exits non-zero on any false positive or false negative against
 the labels, so the corpus doubles as a regression test.
 
+## Project Layout
+
+```
+src/mcpscan/
+  cli.py        argument parsing and the scan subcommand
+  engine.py     runs every check over a loaded manifest
+  loader.py     loads manifests from file, URL, or dict
+  models.py     Manifest / Tool / Finding dataclasses
+  checks.py     the five detectors
+  secrets.py    secret regexes + mask_secret (reused from secret-scanner-cli)
+  scoring.py    deterministic score and band
+  reporting.py  text / json / md formatters
+  llm.py        optional poisoning classifier behind --llm
+  api.py        FastAPI wrapper (POST /scan)
+scripts/benchmark.py   precision/recall against the labeled corpus
+examples/              clean + poisoned manifests, benchmark corpus
+tests/                 9 test modules, one per component
+```
+
 ## Verify
 
 ```bash
 python -m unittest discover -s tests
 ```
 
+Each module has its own test file (loader, models, checks, scoring,
+secrets, reporting, cli, api, llm), so a failure points at the exact
+component that broke.
+
 ## Additional Notes
 
-- The hardest check to write was `tool_poisoning`. Obvious injections like
-  "Ignore all previous instructions" are easy, but attackers can hide
-  instructions in zero-width Unicode or base64. The detector decodes
-  candidate base64 strings and inspects what comes out, and it flags
-  invisible characters that have no business being in a tool description.
 - Reusing the detectors from secret-scanner-cli was the best decision in
   this project. The exfiltration check is literally those secret regexes
   pointed at a new attack surface, and I did not have to debug them twice.
@@ -162,11 +217,11 @@ python -m unittest discover -s tests
 
 ## Responsible Disclosure
 
-MCPScan is for **defensive auditing**. Scan only manifests and endpoints you
+mcpscan is for **defensive auditing**. Scan only manifests and endpoints you
 own, operate, or are authorized to test. If you find an issue in a
 third-party server: report it privately to the maintainer, give them time to
 fix it, and never exploit it.
 
 ## License
 
-MIT
+MIT. See the [LICENSE](LICENSE) file.
