@@ -1,7 +1,7 @@
-"""Secret detection patterns adapted from secret-scanner-cli.
+"""Secret detection patterns adapted from pii-secret-scanner.
 
-https://github.com/sainakakkar2006/secret-scanner-cli — the Rule dataclass,
-the regexes below, and mask_secret are reused directly from that project.
+https://github.com/sainakakkar2006/pii-secret-scanner. The Rule dataclass,
+the regexes below, and mask_secret are reused from that project.
 """
 
 from __future__ import annotations
@@ -30,6 +30,11 @@ SECRET_RULES = [
         pattern=re.compile(r"(?P<secret>gh[pousr]_[A-Za-z0-9_]{20,})"),
     ),
     Rule(
+        name="Google API key",
+        severity="HIGH",
+        pattern=re.compile(r"(?P<secret>AIza[0-9A-Za-z_-]{35})"),
+    ),
+    Rule(
         name="Slack token",
         severity="HIGH",
         pattern=re.compile(r"(?P<secret>xox[baprs]-[A-Za-z0-9-]{20,})"),
@@ -43,7 +48,8 @@ SECRET_RULES = [
         name="Environment assignment with secret-like name",
         severity="MEDIUM",
         pattern=re.compile(
-            r"(?i)\b(?P<secret>(?:api[_-]?key|secret|password|token)\s*=\s*['\"]?[^'\"\s#]+)"
+            r"(?i)(?P<secret>\b[A-Za-z0-9_]*?(?:api[_-]?key|secret|passw(?:or)?d|token)[A-Za-z0-9_]*"
+            r"\s*=\s*['\"]?[^'\"\s#]+)"
         ),
     ),
 ]

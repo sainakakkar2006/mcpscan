@@ -48,7 +48,7 @@ class ReportingTests(unittest.TestCase):
     def test_markdown_report_has_inventory_table(self):
         report = findings_to_markdown(MANIFEST, [FINDING])
         self.assertIn("| Tool | Description | Permissions |", report)
-        self.assertIn("### `list_notes` — tool_poisoning (HIGH)", report)
+        self.assertIn("### `list_notes`: tool_poisoning (HIGH)", report)
 
     def test_write_report_creates_parent_dirs(self):
         with tempfile.TemporaryDirectory() as temp_name:

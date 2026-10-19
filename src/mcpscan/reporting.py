@@ -56,7 +56,7 @@ def findings_to_text(manifest: Manifest, findings: list[Finding]) -> str:
 
 def findings_to_markdown(manifest: Manifest, findings: list[Finding]) -> str:
     lines = [
-        f"# MCPScan report — {manifest.name or '<unnamed>'}",
+        f"# MCPScan report: {manifest.name or '<unnamed>'}",
         "",
         f"**Risk score:** {risk_score(findings)}/100 (**{risk_band(findings)}**)",
         f"**Findings:** {len(findings)}",
@@ -68,7 +68,7 @@ def findings_to_markdown(manifest: Manifest, findings: list[Finding]) -> str:
     ]
     for tool in manifest.tools:
         description = tool.description.replace("|", "\\|")
-        permissions = ", ".join(tool.permissions) or "—"
+        permissions = ", ".join(tool.permissions) or "-"
         lines.append(f"| `{tool.name}` | {description} | {permissions} |")
 
     lines.extend(["", "## Findings", ""])
@@ -79,7 +79,7 @@ def findings_to_markdown(manifest: Manifest, findings: list[Finding]) -> str:
     for finding in findings:
         lines.extend(
             [
-                f"### `{finding.tool}` — {finding.check} ({finding.severity})",
+                f"### `{finding.tool}`: {finding.check} ({finding.severity})",
                 "",
                 f"{finding.detail}",
                 "",

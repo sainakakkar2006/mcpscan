@@ -4,6 +4,7 @@
 
 <p align="center">
   <!-- BADGES:START -->
+  <a href="https://github.com/sainakakkar2006/mcpscan/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/sainakakkar2006/mcpscan/actions/workflows/tests.yml/badge.svg"></a>
   <a href="#"><img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue"></a>
   <a href="#"><img alt="FastAPI" src="https://img.shields.io/badge/fastapi-009688?logo=fastapi&logoColor=white"></a>
   <a href="#"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
@@ -110,7 +111,7 @@ any HIGH finding exists. That makes the one-line CI integration work:
 |---|---|---|---|
 | 1 | `tool_poisoning` | HIGH | Descriptions containing agent-directed instructions, hidden/invisible Unicode, decodable base64 payloads. Optional `--llm` classifier improves recall. |
 | 2 | `broad_scope` | HIGH | Wildcard permissions, shell/exec parameters, root-filesystem defaults, env-var access beyond the stated purpose. |
-| 3 | `exfiltration_path` | HIGH | A sensitive source (env/files/secrets, detected with Secret Scanner's regexes) paired with an external sink (arbitrary URL/webhook). |
+| 3 | `exfiltration_path` | HIGH | A sensitive source (env/files/secrets, detected with pii-secret-scanner's regexes) paired with an external sink (arbitrary URL/webhook). |
 | 4 | `missing_auth` | MEDIUM | No declared authentication/scoped consent, or unencrypted (http://) transport. |
 | 5 | `supply_chain` | MEDIUM | Unpinned versions, unknown publishers, names typosquatting popular servers. |
 | 6 | `shadow_tools` | HIGH | *(planned, dynamic)* Live server exposes tools not in its manifest or makes unexpected network calls. |
@@ -176,7 +177,22 @@ PYTHONPATH=src python3 scripts/benchmark.py
 ```
 
 The script exits non-zero on any false positive or false negative against
-the labels, so the corpus doubles as a regression test.
+the labels, so the corpus doubles as a regression test. Current output:
+
+```
+check                 tp  fp  fn  precision   recall
+broad_scope            1   0   0       1.00     1.00
+exfiltration_path      1   0   0       1.00     1.00
+missing_auth           1   0   0       1.00     1.00
+supply_chain           1   0   0       1.00     1.00
+tool_poisoning         2   0   0       1.00     1.00
+overall                6   0   0       1.00     1.00
+```
+
+Please don't read too much into the 1.00. The corpus is 8 manifests I wrote
+myself, so it shows the detectors do what I designed them to do. It says
+nothing about how they do on manifests written by someone trying to get
+past them. Growing the corpus with real-world manifests is the next step.
 
 ## Project Layout
 
@@ -200,8 +216,11 @@ tests/                 9 test modules, one per component
 ## Verify
 
 ```bash
-python -m unittest discover -s tests
+PYTHONPATH=src python -m unittest discover -s tests   # 47 tests, 2 skipped without the optional extras
 ```
+
+(Without `PYTHONPATH=src`, or a `pip install .` first, the test modules
+cannot import `mcpscan`.)
 
 Each module has its own test file (loader, models, checks, scoring,
 secrets, reporting, cli, api, llm), so a failure points at the exact
@@ -209,9 +228,11 @@ component that broke.
 
 ## Additional Notes
 
-- Reusing the detectors from secret-scanner-cli was the best decision in
+- Reusing the detectors from pii-secret-scanner was the best decision in
   this project. The exfiltration check is literally those secret regexes
-  pointed at a new attack surface, and I did not have to debug them twice.
+  pointed at a new attack surface. The flip side is that a bug there is a
+  bug here too: the assignment regex missed prefixed names like
+  `GEMINI_API_KEY=...`, and I fixed it in both projects at the same time.
 - The example manifests in this repo are synthetic. No real secrets, and the
   tests never scan live third-party servers.
 
