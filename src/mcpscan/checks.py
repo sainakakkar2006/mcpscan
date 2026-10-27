@@ -54,23 +54,52 @@ def _decodes_as_base64(blob: str) -> bool:
 
 
 def detect_tool_poisoning(tool: Tool) -> list[str]:
+    # The agent reads parameter descriptions too, so an injection can hide in the
+    # input schema while the top-level description looks clean.
+    details = _poisoning_in_text(tool.description, "description")
+    for param, text in _schema_descriptions(tool.schema):
+        details.extend(_poisoning_in_text(text, f"parameter {param!r} description"))
+    return details
+
+
+def _poisoning_in_text(text: str, where: str) -> list[str]:
     details: list[str] = []
-    description = tool.description
 
     for pattern in _IMPERATIVE_PATTERNS:
-        match = pattern.search(description)
+        match = pattern.search(text)
         if match:
-            details.append(f"description contains agent-directed instruction: {match.group(0)!r}")
+            details.append(f"{where} contains agent-directed instruction: {match.group(0)!r}")
 
-    if _HIDDEN_UNICODE.search(description):
-        details.append("description contains hidden/invisible Unicode characters")
+    if _HIDDEN_UNICODE.search(text):
+        details.append(f"{where} contains hidden/invisible Unicode characters")
 
-    for blob in _BASE64_BLOB.findall(description):
+    for blob in _BASE64_BLOB.findall(text):
         if _decodes_as_base64(blob):
-            details.append(f"description contains a decodable base64 blob ({len(blob)} chars)")
+            details.append(f"{where} contains a decodable base64 blob ({len(blob)} chars)")
             break
 
     return details
+
+
+def _schema_descriptions(schema: dict, prefix: str = "") -> list[tuple[str, str]]:
+    """Every (parameter path, description) pair in a JSON schema, nested ones included."""
+    found: list[tuple[str, str]] = []
+    properties = schema.get("properties", {})
+    if isinstance(properties, dict):
+        for name, prop in properties.items():
+            if not isinstance(prop, dict):
+                continue
+            path = f"{prefix}.{name}" if prefix else str(name)
+            if isinstance(prop.get("description"), str):
+                found.append((path, prop["description"]))
+            found.extend(_schema_descriptions(prop, path))
+    items = schema.get("items")
+    if isinstance(items, dict):
+        path = f"{prefix}[]" if prefix else "[]"
+        if isinstance(items.get("description"), str):
+            found.append((path, items["description"]))
+        found.extend(_schema_descriptions(items, path))
+    return found
 
 
 # --- check 2: broad_scope ----------------------------------------------------
